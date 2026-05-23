@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elevator System Performance Estimate</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+        }
+        .hidden { display: none !important; }
+        
+        /* Spinner Animation */
+        .loader {
+            border: 4px solid #f3f3f3; border-top: 4px solid #3b82f6;
+            border-radius: 50%; width: 40px; height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Notification Toast */
+        #toast {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: #10b981; color: white; padding: 12px 24px; border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: opacity 0.3s; opacity: 0; pointer-events: none; z-index: 100;
+        }
+        #toast.show { opacity: 1; pointer-events: auto; }
+    </style>
+</head>
+<body class="text-gray-800 h-screen flex flex-col overflow-hidden">
+
+    <div id="loading-overlay" class="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center">
+        <div class="loader mb-4"></div>
+        <h2 class="text-xl font-bold text-gray-700">Initializing Engine...</h2>
+        <p class="text-gray-500 mt-2 text-center max-w-md">Downloading required mathematical libraries (Numpy, Scipy, Pandas).<br>This may take 10-20 seconds on the first load.</p>
+    </div>
+
+    <header class="bg-white shadow-sm py-4 px-6 flex justify-between items-center relative z-10">
+        <h1 class="text-2xl font-bold text-blue-900 tracking-tight"> The University of Hong Kong
+ Elevator Waiting Time Simulator</h1>
+        
+        <!-- Inconspicuous Edit Mode Button -->
+        <button id="toggle-mode-btn" onclick="toggleMode()" class="text-gray-300 hover:text-gray-600 transition-colors duration-300 p-2 rounded-full focus:outline-none" title="Edit Parameters">
+            <i class="fas fa-cog text-xl"></i>
+        </button>
+    </header>
+
+    <main class="flex-1 overflow-y-auto p-4 md:p-8 flex justify-center items-start">
+        
+        <!-- USER MODE WRAPPER -->
+        <div id="user-mode" class="w-full max-w-3xl animate-fade-in transition-all duration-300">
+            <div class="glass-panel rounded-2xl p-6 md:p-10">
+                <h2 class="text-xl font-semibold mb-6 text-gray-700 border-b pb-2">Wait Time Prediction</h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-2">Target System</label>
+                        <select id="sim-system" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white">
+                            <option value="A1">System A1</option>
+                            <option value="A2">System A2</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-2">Passengers Waiting in Queue</label>
+                        <input type="number" id="sim-queue" value="320" min="1" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                </div>
+
+                <button id="run-sim-btn" onclick="runSimulationJS()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg transition-transform transform hover:scale-[1.01] flex justify-center items-center">
+                    <span id="run-sim-text">Calculate Wait Time</span>
+                    <div id="run-sim-loader" class="loader hidden ml-3" style="width: 20px; height: 20px; border-width: 3px; border-top-color: white;"></div>
+                </button>
+
+                <!-- Results Section -->
+                <div id="results-container" class="mt-8 hidden opacity-0 transition-opacity duration-500">
+                    <h3 class="text-lg font-bold text-gray-800 mb-4">Simulation Results</h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <!-- Median Time -->
+                        <div class="bg-blue-50 p-5 rounded-xl border border-blue-100 flex flex-col items-center justify-center text-center">
+                            <span class="text-sm text-blue-600 font-semibold mb-1 uppercase tracking-wide">Median Wait</span>
+                            <span class="text-3xl font-bold text-gray-900"><span id="res-med-wait">--</span> <span class="text-lg text-gray-500 font-normal">mins</span></span>
+                        </div>
+                        
+                        <!-- 95% Interval -->
+                        <div class="bg-green-50 p-5 rounded-xl border border-green-100 flex flex-col items-center justify-center text-center">
+                            <span id="res-conf-label" class="text-sm text-green-600 font-semibold mb-1 uppercase tracking-wide">95% Confidence Interval</span>
+                            <span class="text-2xl font-bold text-gray-900"><span id="res-low-wait">--</span> <span class="text-base text-gray-500 font-normal">to</span> <span id="res-upp-wait">--</span></span>
+                            <span class="text-xs text-gray-500 mt-1">minutes</span>
+                        </div>
+
+                        <!-- Est Trips -->
+                        <div class="bg-purple-50 p-5 rounded-xl border border-purple-100 flex flex-col items-center justify-center text-center">
+                            <span class="text-sm text-purple-600 font-semibold mb-1 uppercase tracking-wide">Estimated Trips</span>
+                            <span class="text-3xl font-bold text-gray-900" id="res-med-trips">--</span>
+                            <span class="text-xs text-gray-600 mt-1">Range: <span id="res-low-trips">--</span> - <span id="res-upp-trips">--</span></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Added "fixed bottom-0 left-0 z-50" and removed "mt-4" -->
+        <div class="fixed bottom-0 left-0 z-50 px-4 mb-4 text-left text-sm text-cyan-400">
+            <i class="fab fa-instagram mr-1"></i> alvin_ccha
+        </div>
+
+        <!-- EDIT MODE WRAPPER -->
+        <div id="edit-mode" class="w-full max-w-5xl hidden animate-fade-in pb-10">
+            
+            <div class="glass-panel rounded-2xl p-6 md:p-10 mb-6">
+                <h2 class="text-2xl font-bold text-gray-800 mb-2 border-b pb-4">Simulation Parameters</h2>
+                <p class="text-sm text-gray-500 mb-6">Modify internal distributions or upload a new tracking dataset.</p>
+
+                <!-- File Upload Section -->
+                <div class="bg-gray-50 p-6 rounded-xl border border-dashed border-gray-300 mb-8 flex flex-col items-center justify-center">
+                    <i class="fas fa-file-excel text-4xl text-green-600 mb-3"></i>
+                    <h3 class="font-bold text-gray-700 mb-1">Auto-fit from Excel</h3>
+                    <p class="text-xs text-gray-500 mb-4 text-center">Upload "Service time reference.xlsx" to execute EM mixture fitting.</p>
+                    <input type="file" id="excel-upload" accept=".xlsx" class="hidden" onchange="uploadExcelJS(event)">
+                    <button onclick="document.getElementById('excel-upload').click()" class="bg-white border border-gray-300 px-4 py-2 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-100">
+                        Choose .xlsx File
+                    </button>
+                    <div id="upload-status" class="mt-3 text-sm font-medium text-blue-600 hidden">
+                        <i class="fas fa-circle-notch fa-spin mr-2"></i> Parsing & Fitting Distributions...
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <!-- Global / Capacity Params -->
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-700 mb-4 bg-gray-100 px-3 py-2 rounded">Global Settings</h3>
+                        <div class="grid grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 uppercase">Simulations (Depth)</label>
+                                <input type="number" id="edit-sim-depth" class="w-full p-2 border rounded mt-1 bg-white">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 uppercase">Quantile Threshold</label>
+                                <input type="number" step="0.01" id="edit-quantile" class="w-full p-2 border rounded mt-1 bg-white">
+                            </div>
+                        </div>
+
+                        <h3 class="text-lg font-bold text-gray-700 mb-4 bg-gray-100 px-3 py-2 rounded mt-6">Capacity (Weibull)</h3>
+                        <div class="grid grid-cols-3 gap-3">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 uppercase">Shape</label>
+                                <input type="number" step="0.01" id="edit-weibull-0" class="w-full p-2 border rounded mt-1 bg-white">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 uppercase">Loc</label>
+                                <input type="number" step="0.01" id="edit-weibull-1" class="w-full p-2 border rounded mt-1 bg-white">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 uppercase">Scale</label>
+                                <input type="number" step="0.01" id="edit-weibull-2" class="w-full p-2 border rounded mt-1 bg-white">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- System Params -->
+                    <div class="space-y-6">
+                        <!-- System A1 -->
+                        <div class="border rounded-xl p-4 bg-white shadow-sm">
+                            <div class="flex justify-between items-center mb-3">
+                                <h3 class="font-bold text-blue-800">System A1</h3>
+                                <div class="flex items-center">
+                                    <label class="text-xs font-bold text-gray-500 uppercase mr-2">Elevators:</label>
+                                    <input type="number" id="edit-servers-a1" class="w-16 p-1 border rounded text-sm text-center">
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <span class="text-xs font-semibold text-gray-400">Class 1 (Half Period) [K, μ, σ]</span>
+                                <div class="grid grid-cols-3 gap-2 mt-1">
+                                    <input type="number" step="0.01" id="edit-a1-c1-0" class="w-full p-2 border rounded text-sm">
+                                    <input type="number" step="0.01" id="edit-a1-c1-1" class="w-full p-2 border rounded text-sm">
+                                    <input type="number" step="0.01" id="edit-a1-c1-2" class="w-full p-2 border rounded text-sm">
+                                </div>
+                            </div>
+                            <div>
+                                <span class="text-xs font-semibold text-gray-400">Class 2 (Full Period) [K, μ, σ]</span>
+                                <div class="grid grid-cols-3 gap-2 mt-1">
+                                    <input type="number" step="0.01" id="edit-a1-c2-0" class="w-full p-2 border rounded text-sm">
+                                    <input type="number" step="0.01" id="edit-a1-c2-1" class="w-full p-2 border rounded text-sm">
+                                    <input type="number" step="0.01" id="edit-a1-c2-2" class="w-full p-2 border rounded text-sm">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- System A2 -->
+                        <div class="border rounded-xl p-4 bg-white shadow-sm">
+                            <div class="flex justify-between items-center mb-3">
+                                <h3 class="font-bold text-green-800">System A2</h3>
+                                <div class="flex items-center">
+                                    <label class="text-xs font-bold text-gray-500 uppercase mr-2">Elevators:</label>
+                                    <input type="number" id="edit-servers-a2" class="w-16 p-1 border rounded text-sm text-center">
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <span class="text-xs font-semibold text-gray-400">Class 1 (Half Period) [K, μ, σ]</span>
+                                <div class="grid grid-cols-3 gap-2 mt-1">
+                                    <input type="number" step="0.01" id="edit-a2-c1-0" class="w-full p-2 border rounded text-sm">
+                                    <input type="number" step="0.01" id="edit-a2-c1-1" class="w-full p-2 border rounded text-sm">
+                                    <input type="number" step="0.01" id="edit-a2-c1-2" class="w-full p-2 border rounded text-sm">
+                                </div>
+                            </div>
+                            <div>
+                                <span class="text-xs font-semibold text-gray-400">Class 2 (Full Period) [K, μ, σ]</span>
+                                <div class="grid grid-cols-3 gap-2 mt-1">
+                                    <input type="number" step="0.01" id="edit-a2-c2-0" class="w-full p-2 border rounded text-sm">
+                                    <input type="number" step="0.01" id="edit-a2-c2-1" class="w-full p-2 border rounded text-sm">
+                                    <input type="number" step="0.01" id="edit-a2-c2-2" class="w-full p-2 border rounded text-sm">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-8 flex justify-end gap-4">
+                    <button onclick="toggleMode()" class="px-6 py-3 rounded-xl font-medium text-gray-600 bg-gray-100 hover:bg-gray-200">Cancel</button>
+                    <button onclick="saveParamsJS()" class="px-8 py-3 rounded-xl font-bold text-white bg-green-600 hover:bg-green-700 shadow-md">Apply Parameters</button>
+                </div>
+
+                <!-- Author Tag -->
+                <div class="mt-6 text-right text-xs text-gray-400/0 select-none">
+                    Author: Cheung Cheuk Hin Alvin
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div id="toast">Message saved</div>
+
+    <script>
+        // Store Pyodide instance
+        let pyodideInstance = null;
+
+        // The python backend script that will be executed in Pyodide
+        const pythonBackendCode = `
+import json
+import numpy as np
+import pandas as pd
+import scipy.stats as stats
+from scipy.stats import exponnorm
+from scipy.optimize import minimize
+from scipy.special import logsumexp
+import io
+import traceback
+
+# Default Parameters
+params = {
+    'weibull': [9.8812, 0, 15.3939],
+    'A1': { 'class1': [0.3418, 89.5158, 9.9086], 'class2': [0.001, 112.1424, 6.6048] },
+    'A2': { 'class1': [0.6614, 56.2170, 7.2868], 'class2': [1.5081, 64.7068, 2.3082] },
+    'servers_a1': 4,
+    'servers_a2': 4,
+    'quantile': 0.05,
+    'sim_depth': 5000
+}
+
+# --- SIMULATION ENGINE ---
+def sample_S_batch(dist_frozen, dist_frozenhalf, n):
+    n_int = int(n)
+    if n_int > 0: return (dist_frozen.rvs(size=n_int) + dist_frozenhalf.rvs(size=n_int)) / 60.0
+    return np.array([], dtype=float)
+
+def sample_Shalf(dist_frozen, n):
+    return dist_frozen.rvs(size=int(n)) / 60.0
+
+def sample_CA2_batch(n, params_weibull):
+    n_int = int(n)
+    if n_int <= 0: return np.array([], dtype=int)
+    shape, loc, scale = params_weibull
+    rv = (scale * np.random.weibull(shape, size=n_int)) + loc
+    return np.maximum(1, np.round(rv)).astype(int)
+
+def get_ks_quantile(ks_sel, pmf_sel, q_level):
+    cdf = np.cumsum(pmf_sel)
+    idx = np.searchsorted(cdf, q_level)
+    idx = min(idx, len(ks_sel) - 1)
+    return int(ks_sel[idx])
+
+def est_TgN_generic(N, dist_frozen, dist_frozenhalf, threshold, number_servers, num_mc, max_period_time, params_weibull):
+    if N <= 0: return 0.0, 0.0, 0.0, 0, 0, 0
+    
+    # 1. Weights P(k|N)
+    c_initial = sample_CA2_batch(1000, params_weibull)
+    avg_c = np.mean(c_initial)
+    max_k = int(max(20, (N / avg_c) * 3.5)) 
+
+    cap_samples = sample_CA2_batch(num_mc * max_k, params_weibull).reshape(num_mc, max_k)
+    cum_cap = np.cumsum(cap_samples, axis=1)
+    f_k_n = np.mean(np.hstack([np.zeros((num_mc, 1)), cum_cap]) > N, axis=0)
+    raw_weights = np.diff(f_k_n) 
+    
+    ks_all = np.arange(1, max_k + 1)
+    mask = raw_weights > 1e-6
+    ks_sel = ks_all[mask]
+    weights = raw_weights[mask]
+    weights /= weights.sum()
+
+    kl = get_ks_quantile(ks_sel, weights, threshold)
+    km = get_ks_quantile(ks_sel, weights, 0.5)
+    ku = get_ks_quantile(ks_sel, weights, 1 - threshold)
+
+    # 2. Conditional Sampling
+    all_t_samples = []
+    for i, k in enumerate(ks_sel):
+        count = int(weights[i] * num_mc)
+        if count == 0: continue
+        depth = (k // number_servers) + 2
+        s_first = np.random.uniform(0, max_period_time, size=(count, 1, number_servers))
+        s_rest = sample_S_batch(dist_frozen, dist_frozenhalf, count * (depth - 1) * number_servers)
+        s_rest = s_rest.reshape(count, depth - 1, number_servers)
+        timelines = np.cumsum(np.concatenate([s_first, s_rest], axis=1), axis=1)
+        k_th_completions = np.sort(timelines.reshape(count, -1), axis=1)[:, k-1]
+        t_k = k_th_completions + sample_Shalf(dist_frozen, count)
+        all_t_samples.append(t_k)
+
+    if not all_t_samples: return 0.0, 0.0, 0.0, 0, 0, 0
+    final_mixture = np.concatenate(all_t_samples)
+    q_low, q_med, q_upp = np.quantile(final_mixture, [threshold/2, 0.5, 1 - threshold/2])
+
+    return float(q_low), float(q_med), float(q_upp), int(kl), int(km), int(ku)
+
+def run_simulation_py(sys_type, N):
+    try:
+        sys_params = params[sys_type]
+        dist_serv = exponnorm(sys_params['class2'][0], loc=sys_params['class2'][1], scale=sys_params['class2'][2])
+        dist_serv_half = exponnorm(sys_params['class1'][0], loc=sys_params['class1'][1], scale=sys_params['class1'][2])
+        max_period = np.max(dist_serv.rvs(100) + dist_serv_half.rvs(100)) / 60.0
+
+        num_servers = params[f'servers_{sys_type.lower()}']
+        res = est_TgN_generic(int(N), dist_serv, dist_serv_half, float(params['quantile']), 
+                              int(num_servers), int(params['sim_depth']), max_period, params['weibull'])
+        
+        return json.dumps({ "low": res[0], "med": res[1], "upp": res[2], "kl": res[3], "km": res[4], "ku": res[5] })
+    except Exception as e:
+        return json.dumps({"error": str(e), "trace": traceback.format_exc()})
+
+# --- EM FITTING ENGINE ---
+def weighted_nll(p, data, weights):
+    K, loc, scale = p
+    if K <= 1e-4 or scale <= 1e-4: return 1e12
+    ll = exponnorm.logpdf(data, K, loc=loc, scale=scale)
+    return -np.sum(weights * ll)
+
+def em_mixture(data, K=2, max_iter=20):
+    N = len(data)
+    threshold = np.percentile(data, 50)
+    resp = np.zeros((N, K))
+    resp[data < threshold, 0] = 0.9
+    resp[data >= threshold, 1] = 0.9
+    prms = [(1.0, np.mean(data)*0.8, np.std(data)), (1.0, np.mean(data)*1.2, np.std(data))]
+    pi = np.array([0.5, 0.5])
+    
+    for _ in range(max_iter):
+        log_resp = np.array([np.log(pi[k] + 1e-10) + exponnorm.logpdf(data, *prms[k]) for k in range(K)]).T
+        resp = np.exp(log_resp - logsumexp(log_resp, axis=1, keepdims=True))
+        pi = resp.sum(axis=0) / N
+        for k in range(K):
+            prms[k] = minimize(weighted_nll, x0=prms[k], args=(data, resp[:, k]), 
+                                 method='L-BFGS-B', bounds=[(1e-4, 50), (None, None), (1e-4, None)]).x
+            
+    def get_mean(p): return p[1] + p[2] * p[0]
+    indices = np.argsort([get_mean(p) for p in prms])
+    return [prms[i].tolist() for i in indices]
+
+def process_excel_py(file_bytes):
+    try:
+        # Explicitly setting engine to openpyxl for stability
+        df = pd.read_excel(io.BytesIO(file_bytes), engine='openpyxl')
+        df.columns = df.columns.str.strip()
+        
+        # Validation
+        if 'Type' not in df.columns or 'Capacity' not in df.columns or 'Total Time' not in df.columns:
+            raise ValueError("Excel must contain 'Type', 'Capacity', and 'Total Time' columns.")
+        
+        cap_data = pd.to_numeric(df.loc[df['Type'].astype(str).str.strip().isin(['A2', 'A1']), 'Capacity'], errors='coerce')
+        cap_data = cap_data[cap_data > 0].dropna().values
+        if len(cap_data) > 0:
+            shape, loc, scale = stats.weibull_min.fit(cap_data, floc=0)
+            params['weibull'] = [float(shape), float(loc), float(scale)]
+            
+        for sys_name in ['A1', 'A2']:
+            data = df[df['Type'].astype(str).str.strip() == sys_name]['Total Time'].dropna().values
+            data = data[data > 0]
+            if len(data) > 10:
+                fits = em_mixture(data)
+                params[sys_name]['class1'] = fits[0]
+                params[sys_name]['class2'] = fits[1]
+                
+        return "SUCCESS"
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+def update_params_py(params_json):
+    global params
+    try:
+        new_data = json.loads(params_json)
+        params.update(new_data)
+        return "OK"
+    except Exception as e:
+        return f"Error updating params: {str(e)}"
+
+def get_params_py():
+    return json.dumps(params)
+`;
+
+        async function initEngine() {
+            try {
+                pyodideInstance = await loadPyodide();
+                await pyodideInstance.loadPackage(['numpy', 'pandas', 'scipy', 'micropip']);
+                const micropip = pyodideInstance.pyimport('micropip');
+                await micropip.install('openpyxl');
+                
+                await pyodideInstance.runPythonAsync(pythonBackendCode);
+                
+                // Hide Loader
+                document.getElementById('loading-overlay').classList.add('hidden');
+                
+                // Load default params into the UI
+                fetchParamsToUI();
+                
+            } catch (err) {
+                console.error("Failed to initialize Pyodide engine:", err);
+                document.getElementById('loading-overlay').innerHTML = `
+                    <div class="text-red-500 text-center">
+                        <i class="fas fa-exclamation-triangle text-4xl mb-4"></i>
+                        <h2 class="text-xl font-bold">Failed to load Engine</h2>
+                        <p class="mt-2 text-sm">Please refresh the page and try again.</p>
+                    </div>`;
+            }
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.innerText = msg;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        let isEditMode = false;
+        function toggleMode() {
+            isEditMode = !isEditMode;
+            document.getElementById('user-mode').classList.toggle('hidden');
+            document.getElementById('edit-mode').classList.toggle('hidden');
+            
+            const btn = document.getElementById('toggle-mode-btn');
+            if (isEditMode) {
+                btn.classList.add('text-blue-500');
+                btn.classList.remove('text-gray-300');
+            } else {
+                btn.classList.remove('text-blue-500');
+                btn.classList.add('text-gray-300');
+            }
+        }
+
+        // --- Bridge Functions ---
+        function fetchParamsToUI() {
+            const get_params_py = pyodideInstance.globals.get('get_params_py');
+            const params = JSON.parse(get_params_py());
+            
+            document.getElementById('edit-sim-depth').value = params.sim_depth;
+            document.getElementById('edit-quantile').value = params.quantile;
+            document.getElementById('edit-weibull-0').value = params.weibull[0].toFixed(3);
+            document.getElementById('edit-weibull-1').value = params.weibull[1].toFixed(3);
+            document.getElementById('edit-weibull-2').value = params.weibull[2].toFixed(3);
+            
+            document.getElementById('edit-servers-a1').value = params.servers_a1;
+            document.getElementById('edit-a1-c1-0').value = params.A1.class1[0].toFixed(3);
+            document.getElementById('edit-a1-c1-1').value = params.A1.class1[1].toFixed(3);
+            document.getElementById('edit-a1-c1-2').value = params.A1.class1[2].toFixed(3);
+            document.getElementById('edit-a1-c2-0').value = params.A1.class2[0].toFixed(3);
+            document.getElementById('edit-a1-c2-1').value = params.A1.class2[1].toFixed(3);
+            document.getElementById('edit-a1-c2-2').value = params.A1.class2[2].toFixed(3);
+
+            document.getElementById('edit-servers-a2').value = params.servers_a2;
+            document.getElementById('edit-a2-c1-0').value = params.A2.class1[0].toFixed(3);
+            document.getElementById('edit-a2-c1-1').value = params.A2.class1[1].toFixed(3);
+            document.getElementById('edit-a2-c1-2').value = params.A2.class1[2].toFixed(3);
+            document.getElementById('edit-a2-c2-0').value = params.A2.class2[0].toFixed(3);
+            document.getElementById('edit-a2-c2-1').value = params.A2.class2[1].toFixed(3);
+            document.getElementById('edit-a2-c2-2').value = params.A2.class2[2].toFixed(3);
+        }
+
+        function saveParamsJS() {
+            // Validation: Ensure all inputs are valid numbers and domains are correct
+            const getVal = (id) => parseFloat(document.getElementById(id).value);
+            const getInt = (id) => parseInt(document.getElementById(id).value);
+            
+            const fields = [
+                'edit-sim-depth', 'edit-quantile', 
+                'edit-weibull-0', 'edit-weibull-1', 'edit-weibull-2',
+                'edit-servers-a1', 'edit-a1-c1-0', 'edit-a1-c1-1', 'edit-a1-c1-2',
+                'edit-a1-c2-0', 'edit-a1-c2-1', 'edit-a1-c2-2',
+                'edit-servers-a2', 'edit-a2-c1-0', 'edit-a2-c1-1', 'edit-a2-c1-2',
+                'edit-a2-c2-0', 'edit-a2-c2-1', 'edit-a2-c2-2'
+            ];
+            
+            for (let id of fields) {
+                if (isNaN(getVal(id))) {
+                    showToast(`Error: Field '${id}' contains an invalid value.`);
+                    return;
+                }
+            }
+
+            // Domain Check: Scale parameters (at index 2) must be > 0
+            // Weibull scale: index 2. exponnorm scale: index 2
+            if (getVal('edit-weibull-2') <= 0 || 
+                getVal('edit-a1-c1-2') <= 0 || getVal('edit-a1-c2-2') <= 0 || 
+                getVal('edit-a2-c1-2') <= 0 || getVal('edit-a2-c2-2') <= 0) {
+                showToast("Error: All Scale parameters must be greater than 0.");
+                return;
+            }
+
+            const params = {
+                sim_depth: getInt('edit-sim-depth'),
+                quantile: getVal('edit-quantile'),
+                weibull: [getVal('edit-weibull-0'), getVal('edit-weibull-1'), getVal('edit-weibull-2')],
+                servers_a1: getInt('edit-servers-a1'),
+                servers_a2: getInt('edit-servers-a2'),
+                A1: {
+                    class1: [getVal('edit-a1-c1-0'), getVal('edit-a1-c1-1'), getVal('edit-a1-c1-2')],
+                    class2: [getVal('edit-a1-c2-0'), getVal('edit-a1-c2-1'), getVal('edit-a1-c2-2')]
+                },
+                A2: {
+                    class1: [getVal('edit-a2-c1-0'), getVal('edit-a2-c1-1'), getVal('edit-a2-c1-2')],
+                    class2: [getVal('edit-a2-c2-0'), getVal('edit-a2-c2-1'), getVal('edit-a2-c2-2')]
+                }
+            };
+
+            const update_params_py = pyodideInstance.globals.get('update_params_py');
+            update_params_py(JSON.stringify(params));
+            showToast("Parameters applied successfully!");
+            toggleMode();
+        }
+
+        async function uploadExcelJS(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const status = document.getElementById('upload-status');
+            status.classList.remove('hidden');
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                // Pass directly; Pyodide handles typed arrays as bytes-like objects automatically.
+                // If it fails, we wrap in the error handler.
+                
+                const process_excel_py = pyodideInstance.globals.get('process_excel_py');
+                const result = process_excel_py(arrayBuffer);
+                
+                status.classList.add('hidden');
+                
+                if (result && result.toString().startsWith("Error")) {
+                    showToast("Error: " + result.toString());
+                    console.error("Excel Error:", result);
+                } else {
+                    fetchParamsToUI();
+                    showToast("File processed and Distributions Fitted!");
+                }
+            } catch (err) {
+                status.classList.add('hidden');
+                showToast("System error processing file.");
+                console.error("File upload error:", err);
+            }
+        }
+            async function runSimulationJS() {
+            const sys = document.getElementById('sim-system').value;
+            const N = document.getElementById('sim-queue').value;
+            const quantile = parseFloat(document.getElementById('edit-quantile').value);
+
+            // UI Feedback
+            const btn = document.getElementById('run-sim-btn');
+            const txt = document.getElementById('run-sim-text');
+            const loader = document.getElementById('run-sim-loader');
+            const results = document.getElementById('results-container');
+            
+            btn.classList.add('opacity-80', 'cursor-not-allowed');
+            txt.innerText = 'Running Monte Carlo...';
+            loader.classList.remove('hidden');
+            results.classList.add('opacity-0');
+
+            await new Promise(r => setTimeout(r, 50));
+
+            try {
+                const run_simulation_py = pyodideInstance.globals.get('run_simulation_py');
+                const rawJson = run_simulation_py(sys, N);
+                const res = JSON.parse(rawJson);
+
+                if (res.error) {
+                    throw new Error(res.error);
+                }
+
+                // Update DOM
+                const ciPercent = ((1 - quantile) * 100).toFixed(0);
+                document.getElementById('res-conf-label').innerText = `${ciPercent}% Confidence Interval`;
+                
+                document.getElementById('res-med-wait').innerText = res.med.toFixed(1);
+                document.getElementById('res-low-wait').innerText = res.low.toFixed(1);
+                document.getElementById('res-upp-wait').innerText = res.upp.toFixed(1);
+                
+                document.getElementById('res-med-trips').innerText = res.km;
+                document.getElementById('res-low-trips').innerText = res.kl;
+                document.getElementById('res-upp-trips').innerText = res.ku;
+
+                results.classList.remove('hidden');
+                setTimeout(() => results.classList.remove('opacity-0'), 50);
+
+            } catch (err) {
+                console.error("Simulation error", err);
+                showToast("Simulation failed: " + err.message);
+            } finally {
+                btn.classList.remove('opacity-80', 'cursor-not-allowed');
+                txt.innerText = 'Calculate Wait Time';
+                loader.classList.add('hidden');
+            }
+        }
+
+        // Start initialization on load
+        window.onload = initEngine;
+    </script>
+</body>
+</html>
