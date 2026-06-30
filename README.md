@@ -8,9 +8,9 @@ Current Limitations
 
 Single-Variable Focus: The model assumes that the number of people waiting is the sole factor affecting wait times, omitting other potential real-world variables.
 
-Distribution Assumptions: It assumes that elevator service times follow an Exponentially Modified Gaussian (Exponormal) distribution and capacities follow a Weibull distribution, with each service period being independent and identically distributed (i.i.d.).
+Distribution Assumptions: It assumes that elevator service times follow an Exponentially Modified Gaussian (Exponormal) distribution and capacities follow Weibull distribution, with each service period being independent and identically distributed (i.i.d.).
 
-Time-Domain Specificity: The default parameters are strictly optimized for the morning peak hours. To use the estimator for the evening rush hour, users must adjust the parameters manually.
+Time-Domain Specificity: The default parameters are optimized for the morning peak hours. To use the estimator for the evening rush hour, users should adjust the parameters manually.
 
 Thank you for visiting! On the left, you can find my Instagram account where I post updates on my current work. I hope you find this estimator helpful and enjoy using it!
 
