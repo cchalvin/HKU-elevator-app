@@ -111,14 +111,13 @@
             <i class="fab fa-instagram mr-1"></i> alvin_ccha
         </div>
 
-        <!-- EDIT MODE WRAPPER -->
+                <!-- EDIT MODE WRAPPER -->
         <div id="edit-mode" class="w-full max-w-5xl hidden animate-fade-in pb-10">
             
-            <div class="glass-panel rounded-2xl p-6 md:p-10 mb-6">
+            <div class="glass-panel rounded-2xl p-6 md:p-10 mb-6 bg-white shadow-lg">
                 <h2 class="text-2xl font-bold text-gray-800 mb-2 border-b pb-4">Simulation Parameters</h2>
                 <p class="text-sm text-gray-500 mb-6">Modify internal distributions or upload a new tracking dataset.</p>
-
-                <!-- File Upload Section -->
+        
                 <div class="bg-gray-50 p-6 rounded-xl border border-dashed border-gray-300 mb-8 flex flex-col items-center justify-center">
                     <i class="fas fa-file-excel text-4xl text-green-600 mb-3"></i>
                     <h3 class="font-bold text-gray-700 mb-1">Auto-fit from Excel</h3>
@@ -131,30 +130,30 @@
                         <i class="fas fa-circle-notch fa-spin mr-2"></i> Parsing & Fitting Distributions...
                     </div>
                 </div>
-                                
-            <div id="data-preview-container" class="hidden mb-8">
-                <h3 class="text-md font-bold text-gray-700 mb-3">Data Preview</h3>
-                
-                <div class="overflow-x-auto border border-gray-200 rounded-lg shadow-sm bg-white">
-                    <table class="min-w-full divide-y divide-gray-200 text-sm">
-                        <thead class="bg-gray-100">
-                            <tr>
-                                <th class="px-4 py-2 text-left font-semibold text-gray-600">Half-Period</th>
-                                <th class="px-4 py-2 text-left font-semibold text-gray-600">Travelling</th>
-                                <th class="px-4 py-2 text-left font-semibold text-gray-600">Leaving</th>
-                                <th class="px-4 py-2 text-left font-semibold text-gray-600">Waiting & Entering</th>
-                                <th class="px-4 py-2 text-left font-semibold text-gray-600">Capacity</th>
-                                <th class="px-4 py-2 text-left font-semibold text-gray-600">Total Time</th>
-                                <th class="px-4 py-2 text-left font-semibold text-gray-600">Type</th>
-                            </tr>
-                        </thead>
-                        <tbody id="data-preview-body" class="divide-y divide-gray-200">
-                            </tbody>
-                    </table>
+                        
+                <div id="data-preview-container" class="hidden mb-8">
+                    <h3 class="text-md font-bold text-gray-700 mb-3">Data Preview</h3>
+                    <div class="overflow-x-auto border border-gray-200 rounded-lg shadow-sm bg-white">
+                        <table class="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead class="bg-gray-100">
+                                <tr>
+                                    <th class="px-4 py-2 text-left font-semibold text-gray-600">Half-Period</th>
+                                    <th class="px-4 py-2 text-left font-semibold text-gray-600">Travelling</th>
+                                    <th class="px-4 py-2 text-left font-semibold text-gray-600">Leaving</th>
+                                    <th class="px-4 py-2 text-left font-semibold text-gray-600">Waiting & Entering</th>
+                                    <th class="px-4 py-2 text-left font-semibold text-gray-600">Capacity</th>
+                                    <th class="px-4 py-2 text-left font-semibold text-gray-600">Total Time</th>
+                                    <th class="px-4 py-2 text-left font-semibold text-gray-600">Type</th>
+                                </tr>
+                            </thead>
+                            <tbody id="data-preview-body" class="divide-y divide-gray-200">
+                                </tbody>
+                        </table>
+                    </div>
                 </div>
-            </div>
+        
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <!-- Global / Capacity Params -->
+                    
                     <div>
                         <h3 class="text-lg font-bold text-gray-700 mb-4 bg-gray-100 px-3 py-2 rounded">Global Settings</h3>
                         <div class="grid grid-cols-2 gap-4 mb-4">
@@ -167,7 +166,7 @@
                                 <input type="number" step="0.01" id="edit-quantile" class="w-full p-2 border rounded mt-1 bg-white">
                             </div>
                         </div>
-
+        
                         <h3 class="text-lg font-bold text-gray-700 mb-4 bg-gray-100 px-3 py-2 rounded mt-6">Capacity (Weibull)</h3>
                         <div class="grid grid-cols-3 gap-3">
                             <div>
@@ -184,10 +183,8 @@
                             </div>
                         </div>
                     </div>
-
-                    <!-- System Params -->
+        
                     <div class="space-y-6">
-                        <!-- System A1 -->
                         <div class="border rounded-xl p-4 bg-white shadow-sm">
                             <div class="flex justify-between items-center mb-3">
                                 <h3 class="font-bold text-blue-800">System A1</h3>
@@ -196,7 +193,6 @@
                                     <input type="number" id="edit-servers-a1" class="w-16 p-1 border rounded text-sm text-center">
                                 </div>
                             </div>
-                            
                             <div class="mb-3">
                                 <span class="text-xs font-semibold text-gray-400">Class 1 (Half Period) [K, μ, σ]</span>
                                 <div class="grid grid-cols-3 gap-2 mt-1">
@@ -214,8 +210,7 @@
                                 </div>
                             </div>
                         </div>
-
-                        <!-- System A2 -->
+        
                         <div class="border rounded-xl p-4 bg-white shadow-sm">
                             <div class="flex justify-between items-center mb-3">
                                 <h3 class="font-bold text-green-800">System A2</h3>
@@ -224,7 +219,6 @@
                                     <input type="number" id="edit-servers-a2" class="w-16 p-1 border rounded text-sm text-center">
                                 </div>
                             </div>
-                            
                             <div class="mb-3">
                                 <span class="text-xs font-semibold text-gray-400">Class 1 (Half Period) [K, μ, σ]</span>
                                 <div class="grid grid-cols-3 gap-2 mt-1">
@@ -242,20 +236,15 @@
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </div>
-
-                <div class="mt-8 flex justify-end gap-4">
+                    </div> </div> <div class="mt-8 flex justify-end gap-4">
                     <button onclick="toggleMode()" class="px-6 py-3 rounded-xl font-medium text-gray-600 bg-gray-100 hover:bg-gray-200">Cancel</button>
                     <button onclick="saveParamsJS()" class="px-8 py-3 rounded-xl font-bold text-white bg-green-600 hover:bg-green-700 shadow-md">Apply Parameters</button>
                 </div>
-
-                <!-- Author Tag -->
+        
                 <div class="mt-6 text-right text-xs text-gray-400/0 select-none">
                     Author: Cheung Cheuk Hin Alvin
                 </div>
-            </div>
-        </div>
+            </div> </div> 
     </main>
 
     <div id="toast">Message saved</div>
