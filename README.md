@@ -1,6 +1,6 @@
 # HKU Elevator Estimator
 
-This website is designed to help HKU students, staff, and visitors estimate how long they will need to wait to travel from HKU Station to the main campus. By simply entering the number of people waiting ahead of you, the tool will provide an estimated arrival time along with a prediction interval.
+This website is designed to help HKU students, staff, and visitors estimate the time they will need to wait and travel from HKU Station to the main campus. By simply entering the number of people waiting ahead of you, the tool will provide an estimated arrival time along with a prediction interval.
 
 For advanced users, clicking the button in the top-right corner allows you to modify the estimator's underlying parameters. You can customize the number of active elevators, the time intervals for quantile calculations, the service times, and the capacity parameters.
 
