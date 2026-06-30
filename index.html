@@ -603,7 +603,30 @@ def get_params_py():
                 console.error("File upload error:", err);
             }
         }
-    
+        function renderDataPreview(data) {
+        const tbody = document.getElementById('data-preview-body');
+        const container = document.getElementById('data-preview-container');
+        
+        tbody.innerHTML = ''; // Clear existing rows
+        
+        data.forEach(row => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="px-4 py-2 border-b">${row.halfPeriod ?? '-'}</td>
+                <td class="px-4 py-2 border-b">${row.travelling ?? '-'}</td>
+                <td class="px-4 py-2 border-b">${row.leaving ?? '-'}</td>
+                <td class="px-4 py-2 border-b">${row.waitingEntering ?? '-'}</td>
+                <td class="px-4 py-2 border-b">${row.capacity ?? '-'}</td>
+                <td class="px-4 py-2 border-b">${row.totalTime ?? '-'}</td>
+                <td class="px-4 py-2 border-b">${row.type ?? '-'}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        // Show the container
+        container.classList.remove('hidden');
+    }
+        
         async function runSimulationJS() {
             const sys = document.getElementById('sim-system').value;
             const N = document.getElementById('sim-queue').value;
