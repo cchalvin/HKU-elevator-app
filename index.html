@@ -424,6 +424,32 @@ def get_params_py():
     return json.dumps(params)
 `;
 
+        // --- Helper: Render Table Data ---
+        function renderDataPreview(data) {
+            const tbody = document.getElementById('data-preview-body');
+            const container = document.getElementById('data-preview-container');
+            
+            tbody.innerHTML = ''; // Clear existing rows
+            
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="px-4 py-2 border-b">${row.halfPeriod ?? '-'}</td>
+                    <td class="px-4 py-2 border-b">${row.travelling ?? '-'}</td>
+                    <td class="px-4 py-2 border-b">${row.leaving ?? '-'}</td>
+                    <td class="px-4 py-2 border-b">${row.waitingEntering ?? '-'}</td>
+                    <td class="px-4 py-2 border-b">${row.capacity ?? '-'}</td>
+                    <td class="px-4 py-2 border-b">${row.totalTime ?? '-'}</td>
+                    <td class="px-4 py-2 border-b">${row.type ?? '-'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+    
+            // Show the container
+            container.classList.remove('hidden');
+        }
+    
+        // --- Initialization ---
         async function initEngine() {
             try {
                 pyodideInstance = await loadPyodide();
@@ -433,12 +459,8 @@ def get_params_py():
                 
                 await pyodideInstance.runPythonAsync(pythonBackendCode);
                 
-                // Hide Loader
                 document.getElementById('loading-overlay').classList.add('hidden');
-                
-                // Load default params into the UI
                 fetchParamsToUI();
-                
             } catch (err) {
                 console.error("Failed to initialize Pyodide engine:", err);
                 document.getElementById('loading-overlay').innerHTML = `
@@ -449,14 +471,14 @@ def get_params_py():
                     </div>`;
             }
         }
-
+    
         function showToast(msg) {
             const toast = document.getElementById('toast');
             toast.innerText = msg;
             toast.classList.add('show');
             setTimeout(() => toast.classList.remove('show'), 3000);
         }
-
+    
         let isEditMode = false;
         function toggleMode() {
             isEditMode = !isEditMode;
@@ -472,7 +494,7 @@ def get_params_py():
                 btn.classList.add('text-gray-300');
             }
         }
-
+    
         // --- Bridge Functions ---
         function fetchParamsToUI() {
             const get_params_py = pyodideInstance.globals.get('get_params_py');
@@ -491,7 +513,7 @@ def get_params_py():
             document.getElementById('edit-a1-c2-0').value = params.A1.class2[0].toFixed(3);
             document.getElementById('edit-a1-c2-1').value = params.A1.class2[1].toFixed(3);
             document.getElementById('edit-a1-c2-2').value = params.A1.class2[2].toFixed(3);
-
+    
             document.getElementById('edit-servers-a2').value = params.servers_a2;
             document.getElementById('edit-a2-c1-0').value = params.A2.class1[0].toFixed(3);
             document.getElementById('edit-a2-c1-1').value = params.A2.class1[1].toFixed(3);
@@ -500,9 +522,8 @@ def get_params_py():
             document.getElementById('edit-a2-c2-1').value = params.A2.class2[1].toFixed(3);
             document.getElementById('edit-a2-c2-2').value = params.A2.class2[2].toFixed(3);
         }
-
+    
         function saveParamsJS() {
-            // Validation: Ensure all inputs are valid numbers and domains are correct
             const getVal = (id) => parseFloat(document.getElementById(id).value);
             const getInt = (id) => parseInt(document.getElementById(id).value);
             
@@ -521,16 +542,14 @@ def get_params_py():
                     return;
                 }
             }
-
-            // Domain Check: Scale parameters (at index 2) must be > 0
-            // Weibull scale: index 2. exponnorm scale: index 2
+    
             if (getVal('edit-weibull-2') <= 0 || 
                 getVal('edit-a1-c1-2') <= 0 || getVal('edit-a1-c2-2') <= 0 || 
                 getVal('edit-a2-c1-2') <= 0 || getVal('edit-a2-c2-2') <= 0) {
                 showToast("Error: All Scale parameters must be greater than 0.");
                 return;
             }
-
+    
             const params = {
                 sim_depth: getInt('edit-sim-depth'),
                 quantile: getVal('edit-quantile'),
@@ -546,34 +565,35 @@ def get_params_py():
                     class2: [getVal('edit-a2-c2-0'), getVal('edit-a2-c2-1'), getVal('edit-a2-c2-2')]
                 }
             };
-
+    
             const update_params_py = pyodideInstance.globals.get('update_params_py');
             update_params_py(JSON.stringify(params));
             showToast("Parameters applied successfully!");
             toggleMode();
         }
-
+    
         async function uploadExcelJS(event) {
             const file = event.target.files[0];
             if (!file) return;
-
+    
             const status = document.getElementById('upload-status');
             status.classList.remove('hidden');
-
+    
             try {
                 const arrayBuffer = await file.arrayBuffer();
-                // Pass directly; Pyodide handles typed arrays as bytes-like objects automatically.
-                // If it fails, we wrap in the error handler.
-                
                 const process_excel_py = pyodideInstance.globals.get('process_excel_py');
-                const result = process_excel_py(arrayBuffer);
+                
+                // Expecting Python to return JSON string: { "error": null, "preview": [...] }
+                const resultRaw = process_excel_py(arrayBuffer);
+                const result = JSON.parse(resultRaw);
                 
                 status.classList.add('hidden');
                 
-                if (result && result.toString().startsWith("Error")) {
-                    showToast("Error: " + result.toString());
-                    console.error("Excel Error:", result);
+                if (result.error) {
+                    showToast("Error: " + result.error);
+                    console.error("Excel Error:", result.error);
                 } else {
+                    if (result.preview) renderDataPreview(result.preview);
                     fetchParamsToUI();
                     showToast("File processed and Distributions Fitted!");
                 }
@@ -583,12 +603,12 @@ def get_params_py():
                 console.error("File upload error:", err);
             }
         }
-            async function runSimulationJS() {
+    
+        async function runSimulationJS() {
             const sys = document.getElementById('sim-system').value;
             const N = document.getElementById('sim-queue').value;
             const quantile = parseFloat(document.getElementById('edit-quantile').value);
-
-            // UI Feedback
+    
             const btn = document.getElementById('run-sim-btn');
             const txt = document.getElementById('run-sim-text');
             const loader = document.getElementById('run-sim-loader');
@@ -598,21 +618,20 @@ def get_params_py():
             txt.innerText = 'Running Monte Carlo...';
             loader.classList.remove('hidden');
             results.classList.add('opacity-0');
-
+    
             await new Promise(r => setTimeout(r, 50));
-
+    
             try {
                 const run_simulation_py = pyodideInstance.globals.get('run_simulation_py');
                 const rawJson = run_simulation_py(sys, N);
                 const res = JSON.parse(rawJson);
-
+    
                 if (res.error) {
                     throw new Error(res.error);
                 }
-
-                // Update DOM
+    
                 const ciPercent = ((1 - quantile) * 100).toFixed(0);
-                document.getElementById('res-conf-label').innerText = `${ciPercent}% Confidence Interval`;
+                document.getElementById('res-conf-label').innerText = `${ciPercent}% Credible Time Interval`;
                 
                 document.getElementById('res-med-wait').innerText = res.med.toFixed(1);
                 document.getElementById('res-low-wait').innerText = res.low.toFixed(1);
@@ -621,10 +640,9 @@ def get_params_py():
                 document.getElementById('res-med-trips').innerText = res.km;
                 document.getElementById('res-low-trips').innerText = res.kl;
                 document.getElementById('res-upp-trips').innerText = res.ku;
-
+    
                 results.classList.remove('hidden');
                 setTimeout(() => results.classList.remove('opacity-0'), 50);
-
             } catch (err) {
                 console.error("Simulation error", err);
                 showToast("Simulation failed: " + err.message);
@@ -634,8 +652,7 @@ def get_params_py():
                 loader.classList.add('hidden');
             }
         }
-
-        // Start initialization on load
+    
         window.onload = initEngine;
     </script>
 </body>
